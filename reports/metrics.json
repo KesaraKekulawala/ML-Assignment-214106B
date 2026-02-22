@@ -1,0 +1,36 @@
+{
+  "dataset": "Vegetables_prices_with_climate_130000_2020_to_2025.xlsx",
+  "rows_total_after_cleaning": 130000,
+  "rows_train": 77986,
+  "rows_val": 25971,
+  "rows_test": 26042,
+  "metrics_val": {
+    "rmse": 62.231984315920876,
+    "mae": 50.48313422624664,
+    "r2": 0.7691567142590349
+  },
+  "metrics_test": {
+    "rmse": 61.993423225934194,
+    "mae": 50.30762995299473,
+    "r2": 0.7712576771708832
+  },
+  "feature_columns": [
+    "region",
+    "vegetable_commodity",
+    "season",
+    "temperature_c",
+    "rainfall_mm",
+    "humidity_pct",
+    "crop_yield_impact_score",
+    "month",
+    "weekofyear",
+    "quarter",
+    "year"
+  ],
+  "categorical_features": [
+    "region",
+    "vegetable_commodity",
+    "season"
+  ],
+  "best_iteration": 1999
+}
