@@ -21,7 +21,7 @@ with open(BASELINE_PATH, "r", encoding="utf-8") as f:
     CLIMATE_BASELINES = json.load(f)
 app = FastAPI(title="Vegetable Price Prediction API")
 
-# Enable CORS (so React can connect later)
+# Enable CORS 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -51,7 +51,7 @@ def predict_price(data: PredictionInput):
         input_dict["region"] = str(input_dict["region"]).strip()
         input_dict["vegetable_commodity"] = str(input_dict["vegetable_commodity"]).strip()
 
-        # ✅ If date is provided, derive time fields automatically
+        # If date is provided, derive time fields automatically
         used_baseline = False
         if input_dict.get("date"):
             y, m, w, q = derive_time_parts(input_dict["date"])
@@ -60,11 +60,11 @@ def predict_price(data: PredictionInput):
             input_dict["weekofyear"] = w
             input_dict["quarter"] = q
 
-        # ✅ Validate we have month/year (either from date or direct input)
+        # Validate we have month/year (either from date or direct input)
         if input_dict.get("month") is None or input_dict.get("year") is None:
             raise ValueError("Provide either 'date' (YYYY-MM-DD) or 'month' and 'year'.")
 
-         # ✅ Auto-fill climate values if missing (Simple mode)
+         # Auto-fill climate values if missing (Simple mode)
         if (
             input_dict.get("temperature_c") is None
             or input_dict.get("rainfall_mm") is None
@@ -78,7 +78,7 @@ def predict_price(data: PredictionInput):
             input_dict["crop_yield_impact_score"] = base["crop_yield_impact_score"] if input_dict.get("crop_yield_impact_score") is None else input_dict["crop_yield_impact_score"]
             used_baseline = True
 
-        # ✅ season derived from month (must match training)
+        # season derived from month (must match training)
         m = int(input_dict["month"])
         input_dict["season"] = "maha" if m in [10, 11, 12, 1, 2, 3] else "yala"
 
@@ -118,16 +118,11 @@ def explain_prediction(data: PredictionInput):
     try:
         input_dict = data.dict()
 
-        # -----------------------------
-        # 1) Normalize strings
-        # -----------------------------
+       
         input_dict["region"] = str(input_dict.get("region", "")).strip()
         input_dict["vegetable_commodity"] = str(input_dict.get("vegetable_commodity", "")).strip()
 
-        # -----------------------------
-        # 2) Derive time features from date
-        # -----------------------------
-        # Expect date as "YYYY-MM-DD" from frontend
+       
         date_str = input_dict.get("date")
         if not date_str:
             raise ValueError("date is required (YYYY-MM-DD).")
@@ -139,21 +134,11 @@ def explain_prediction(data: PredictionInput):
         input_dict["weekofyear"] = int(dt.isocalendar().week)
         input_dict["quarter"] = int((dt.month - 1) // 3 + 1)
 
-        # Season (same as training)
+        
         m = input_dict["month"]
         input_dict["season"] = "maha" if m in [10, 11, 12, 1, 2, 3] else "yala"
 
-        # -----------------------------
-        # 3) Apply baseline climate if missing (Simple mode)
-        # -----------------------------
-        # If user didn't provide any climate value, we fill from baseline
-        # Baselines should be loaded into CLIMATE_BASELINES dict in your API
-        # Example structure:
-        # CLIMATE_BASELINES[region][month] = {
-        #   "temperature_c": ..., "rainfall_mm": ..., "humidity_pct": ..., "crop_yield_impact_score": ...
-        # }
-
-        # Check missing values
+       
         climate_fields = ["temperature_c", "rainfall_mm", "humidity_pct", "crop_yield_impact_score"]
         missing_any = any(input_dict.get(f) is None for f in climate_fields)
 
@@ -175,9 +160,7 @@ def explain_prediction(data: PredictionInput):
                     baseline_used[f] = float(base[f])
                     used_baseline = True
 
-        # -----------------------------
-        # 4) Prepare dataframe in correct feature order
-        # -----------------------------
+        
         df = pd.DataFrame([{
             "region": input_dict["region"],
             "vegetable_commodity": input_dict["vegetable_commodity"],
@@ -192,22 +175,16 @@ def explain_prediction(data: PredictionInput):
             "year": int(input_dict["year"]),
         }])
 
-        df = df[feature_columns]  # ensure same order as training
-
-        # -----------------------------
-        # 5) Predict
-        # -----------------------------
+        df = df[feature_columns]  
         prediction = float(model.predict(df)[0])
 
-        # -----------------------------
-        # 6) SHAP for this single row
-        # -----------------------------
+        
         explainer = shap.TreeExplainer(model)
-        shap_values = explainer.shap_values(df)  # shape (1, n_features)
+        shap_values = explainer.shap_values(df) 
 
         contributions = dict(zip(feature_columns, [float(x) for x in shap_values[0]]))
 
-        # Sort top contributions by absolute impact
+        
         top = sorted(
             [{"feature": k, "shap": v} for k, v in contributions.items()],
             key=lambda x: abs(x["shap"]),
@@ -237,7 +214,7 @@ def derive_time_parts(date_str: str):
     dt = datetime.strptime(date_str, "%Y-%m-%d")
     year = dt.year
     month = dt.month
-    weekofyear = int(dt.strftime("%U")) + 1  # simple week number (1-53)
+    weekofyear = int(dt.strftime("%U")) + 1  
     quarter = math.floor((month - 1) / 3) + 1
     return year, month, weekofyear, quarter
 
@@ -267,7 +244,7 @@ def get_climate_baseline(region: str, month: int):
                 "crop_yield_impact_score": sum(v["crop_yield_impact_score"] for v in vals) / len(vals),
             }
 
-    # 3) global average
+  
     all_vals = []
     for reg in CLIMATE_BASELINES.values():
         all_vals.extend(list(reg.values()))
@@ -279,7 +256,7 @@ def get_climate_baseline(region: str, month: int):
             "crop_yield_impact_score": sum(v["crop_yield_impact_score"] for v in all_vals) / len(all_vals),
         }
 
-    # extreme fallback (should never happen)
+   
     return {"temperature_c": 28.0, "rainfall_mm": 100.0, "humidity_pct": 75.0, "crop_yield_impact_score": 1.0}
 
 

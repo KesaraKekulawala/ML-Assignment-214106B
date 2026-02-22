@@ -1,19 +1,3 @@
-# src/explain.py
-"""
-Generate SHAP explainability outputs (PNG + HTML) for the trained CatBoost model.
-
-Outputs:
-- reports/figures/shap_summary.png
-- reports/figures/shap_bar.png
-- reports/figures/shap_waterfall_sample.png
-- reports/shap_summary.html
-- reports/shap_waterfall_sample.html
-- reports/shap_values_sample.csv
-
-Run:
-  python -m src.explain --file "Vegetables_prices_with_climate_130000_2020_to_2025.xlsx"
-"""
-
 from __future__ import annotations
 
 import argparse
@@ -26,9 +10,6 @@ import pandas as pd
 import shap
 
 
-# -----------------------------
-# Paths
-# -----------------------------
 def get_paths():
     root = Path(__file__).resolve().parents[1]
     data_raw = root / "data" / "raw"
@@ -42,9 +23,6 @@ def get_paths():
     return root, data_raw, models, reports, figures
 
 
-# -----------------------------
-# Preprocessing (must match train.py)
-# -----------------------------
 def safe_rename_columns(df: pd.DataFrame) -> pd.DataFrame:
     df.columns = (
         df.columns.astype(str)
@@ -61,11 +39,10 @@ def safe_rename_columns(df: pd.DataFrame) -> pd.DataFrame:
         "Region": "region",
         "Date": "date",
 
-        # Correct spelling
+     
         "vegetable_Commodity": "vegetable_commodity",
         "vegetable_Price per Unit (LKR/kg)": "price_lkr_per_kg",
 
-        # Misspelled (your dataset had this earlier)
         "vegitable_Commodity": "vegetable_commodity",
         "vegitable_Price per Unit (LKR/kg)": "price_lkr_per_kg",
     }
@@ -127,9 +104,6 @@ def build_features(df: pd.DataFrame) -> pd.DataFrame:
     return df[feature_cols].copy()
 
 
-# -----------------------------
-# SHAP helpers
-# -----------------------------
 def save_matplotlib_png(path: Path):
     path.parent.mkdir(parents=True, exist_ok=True)
     plt.tight_layout()
@@ -147,7 +121,7 @@ def main():
 
     root, data_raw, models_dir, reports_dir, figures_dir = get_paths()
 
-    # Load trained model bundle
+
     bundle_path = models_dir / "veg_price_model.joblib"
     if not bundle_path.exists():
         raise FileNotFoundError(
@@ -158,7 +132,6 @@ def main():
     model = bundle["model"]
     feature_columns = bundle["feature_columns"]
 
-    # Load dataset
     xlsx_path = data_raw / args.file
     if not xlsx_path.exists():
         raise FileNotFoundError(f"Excel file not found: {xlsx_path}")
@@ -169,39 +142,31 @@ def main():
     df = add_time_features(df)
     df = basic_cleaning(df)
 
-    # Sort by date for consistent sample selection
+
     df = df.sort_values("date").reset_index(drop=True)
 
-    # Use only recent-ish data for SHAP (optional) and cap size for speed
+
     if len(df) > args.max_rows:
         df = df.tail(args.max_rows).reset_index(drop=True)
 
     X = build_features(df)
 
-    # Ensure column order matches training
+
     X = X[feature_columns]
 
-    # Create SHAP explainer (CatBoost compatible)
-    # Note: For CatBoost, shap.Explainer will work, but can be heavy on very large datasets.
+
     explainer = shap.Explainer(model)
     shap_values = explainer(X)
 
-    # -----------------------------
-    # 1) Global summary plot (PNG)
-    # -----------------------------
+
     plt.figure()
     shap.summary_plot(shap_values, X, show=False)
     save_matplotlib_png(figures_dir / "shap_summary.png")
 
-    # 2) Global bar plot (PNG)
     plt.figure()
     shap.summary_plot(shap_values, X, plot_type="bar", show=False)
     save_matplotlib_png(figures_dir / "shap_bar.png")
 
-    # -----------------------------
-    # 3) Global summary (HTML interactive)
-    # -----------------------------
-# Use force plot for interactive HTML (global sample)
     html_rows = min(args.html_rows, len(X))
     X_html = X.sample(n=html_rows, random_state=42)
 
@@ -215,9 +180,7 @@ def main():
 
     shap.save_html(str(reports_dir / "shap_summary.html"), force_plot)
 
-    # -----------------------------
-    # 4) Local explanation for one sample (PNG + HTML)
-    # -----------------------------
+
     idx = int(args.sample_index)
     if idx < 0 or idx >= len(X):
         raise ValueError(f"sample_index out of range. Must be 0..{len(X)-1}")
@@ -225,12 +188,12 @@ def main():
     single = X.iloc[[idx]]
     single_sv = explainer(single)
 
-    # Waterfall PNG
+
     plt.figure()
     shap.plots.waterfall(single_sv[0], show=False)
     save_matplotlib_png(figures_dir / "shap_waterfall_sample.png")
 
-    # Waterfall HTML
+
     force_local = shap.plots.force(
     single_sv.base_values[0],
     single_sv.values[0],
@@ -239,8 +202,7 @@ def main():
 
     shap.save_html(str(reports_dir / "shap_waterfall_sample.html"), force_local)
 
-    # Save SHAP values for that sample as CSV (useful for React later)
-    # This includes feature contributions (approx)
+
     sample_df = pd.DataFrame({
         "feature": single.columns,
         "value": single.iloc[0].values,

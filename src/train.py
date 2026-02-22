@@ -1,19 +1,4 @@
-# src/train.py
-"""
-Train a non-deep-learning regression model (CatBoost) to predict weekly vegetable prices
-in Sri Lanka using climate + region + commodity + time features.
 
-Input (Excel .xlsx): data/raw/<your_file>.xlsx
-
-Outputs:
-- Trained model bundle: models/veg_price_model.joblib
-- Climate baselines (region+month historical averages): models/climate_baselines.json
-- Metrics JSON: reports/metrics.json
-- Actual vs Pred plot: reports/figures/actual_vs_pred_test.png
-
-Run:
-  python -m src.train --file "Vegetables_prices_with_climate_130000_2020_to_2025.xlsx"
-"""
 
 from __future__ import annotations
 
@@ -32,9 +17,7 @@ from catboost import CatBoostRegressor
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 
 
-# -----------------------------
-# Config
-# -----------------------------
+
 @dataclass(frozen=True)
 class Paths:
     root: Path
@@ -51,26 +34,21 @@ def get_paths() -> Paths:
     reports = root / "reports"
     figures = reports / "figures"
 
-    # Ensure folders exist
+
     for p in [data_raw, models, reports, figures]:
         p.mkdir(parents=True, exist_ok=True)
 
     return Paths(root=root, data_raw=data_raw, models=models, reports=reports, figures=figures)
 
 
-# -----------------------------
-# Utilities
-# -----------------------------
+
 def safe_rename_columns(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Clean column names to handle Excel hidden spaces/characters,
-    then rename to code-friendly names.
-    """
-    # Normalize headers: strip spaces + replace non-breaking spaces
+  
+  
     df.columns = (
         df.columns.astype(str)
-        .str.replace("\u00A0", " ", regex=False)  # non-breaking space
-        .str.replace("\ufeff", "", regex=False)  # BOM
+        .str.replace("\u00A0", " ", regex=False)  
+        .str.replace("\ufeff", "", regex=False)  
         .str.strip()
     )
 
@@ -80,11 +58,10 @@ def safe_rename_columns(df: pd.DataFrame) -> pd.DataFrame:
         "Humidity (%)": "humidity_pct",
         "Crop Yield Impact Score": "crop_yield_impact_score",
 
-        # Correct spelling
         "vegetable_Commodity": "vegetable_commodity",
         "vegetable_Price per Unit (LKR/kg)": "price_lkr_per_kg",
 
-        # Misspelled in your Excel (vegitable)
+  
         "vegitable_Commodity": "vegetable_commodity",
         "vegitable_Price per Unit (LKR/kg)": "price_lkr_per_kg",
 
@@ -92,15 +69,13 @@ def safe_rename_columns(df: pd.DataFrame) -> pd.DataFrame:
         "Date": "date",
     }
 
-    # Apply renaming only where keys match
+
     df = df.rename(columns={k: v for k, v in rename_map.items() if k in df.columns})
     return df
 
 
 def validate_required_columns(df: pd.DataFrame) -> None:
-    """
-    Validate columns exist AFTER safe_rename_columns().
-    """
+
     required = [
         "date",
         "region",
@@ -117,16 +92,14 @@ def validate_required_columns(df: pd.DataFrame) -> None:
 
 
 def parse_date(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Ensure 'date' is datetime. Handles Excel date serials and string dates.
-    """
+
     if "date" not in df.columns:
         raise ValueError("Expected a 'Date' column (renamed to 'date').")
 
-    # Try robust parsing
+
     df["date"] = pd.to_datetime(df["date"], errors="coerce", dayfirst=False)
 
-    # If many NaT, Excel serials might be present; attempt fallback
+
     if df["date"].isna().mean() > 0.2:
         df["date"] = pd.to_datetime(df["date"], errors="coerce", unit="D", origin="1899-12-30")
 
@@ -138,29 +111,22 @@ def parse_date(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def add_time_features(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Add useful non-leaky time features derived from date.
-    """
+
     df["year"] = df["date"].dt.year.astype(int)
     df["month"] = df["date"].dt.month.astype(int)
     df["weekofyear"] = df["date"].dt.isocalendar().week.astype(int)
     df["quarter"] = df["date"].dt.quarter.astype(int)
 
-    # Simple season indicator (Sri Lanka: Maha roughly Oct–Mar, Yala roughly Apr–Sep)
+
     df["season"] = np.where(df["month"].isin([10, 11, 12, 1, 2, 3]), "maha", "yala")
     return df
 
 
 def basic_cleaning(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Minimal cleaning:
-    - drop duplicates
-    - drop rows with missing target or critical features
-    - fix dtypes
-    """
+   
     df = df.drop_duplicates().copy()
 
-    # Ensure expected dtypes
+
     df["region"] = df["region"].astype(str).str.strip()
     df["vegetable_commodity"] = df["vegetable_commodity"].astype(str).str.strip()
     df["season"] = df["season"].astype(str)
@@ -169,7 +135,7 @@ def basic_cleaning(df: pd.DataFrame) -> pd.DataFrame:
     for c in numeric_cols:
         df[c] = pd.to_numeric(df[c], errors="coerce")
 
-    # Drop rows with missing essentials
+
     df = df.dropna(subset=["price_lkr_per_kg", "region", "vegetable_commodity", "date"])
     df = df.dropna(subset=["temperature_c", "rainfall_mm", "humidity_pct", "crop_yield_impact_score"])
 
@@ -177,19 +143,7 @@ def basic_cleaning(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def build_climate_baselines(df: pd.DataFrame) -> dict:
-    """
-    Build region+month baselines (historical averages) for climate variables.
-    Used for Simple-mode future prediction when user doesn't know climate values.
-
-    Output format:
-    {
-      "Colombo": {
-        "1": {"temperature_c": ..., "rainfall_mm": ..., "humidity_pct": ..., "crop_yield_impact_score": ...},
-        ...
-      },
-      ...
-    }
-    """
+    
     cols = [
         "region",
         "month",
@@ -226,12 +180,7 @@ def build_climate_baselines(df: pd.DataFrame) -> dict:
 
 
 def time_split(df: pd.DataFrame):
-    """
-    Time-based split (since 2025 only has a single date).
-    Train: 2020–2022
-    Val:   2023
-    Test:  2024
-    """
+    
     train = df[df["year"].between(2020, 2022)].copy()
     val = df[df["year"] == 2023].copy()
     test = df[df["year"] == 2024].copy()
@@ -246,9 +195,7 @@ def time_split(df: pd.DataFrame):
 
 
 def build_features_targets(df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.Series, List[int]]:
-    """
-    Return X, y, and categorical feature indices for CatBoost.
-    """
+    
     feature_cols = [
         "region",
         "vegetable_commodity",
@@ -266,7 +213,7 @@ def build_features_targets(df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.Series, L
     X = df[feature_cols].copy()
     y = df["price_lkr_per_kg"].copy()
 
-    # CatBoost expects categorical feature indices by column position
+    
     cat_cols = ["region", "vegetable_commodity", "season"]
     cat_indices = [X.columns.get_loc(c) for c in cat_cols]
 
@@ -287,7 +234,7 @@ def plot_actual_vs_pred(y_true: np.ndarray, y_pred: np.ndarray, out_path: Path, 
     plt.ylabel("Predicted Price (LKR/kg)")
     plt.title(title)
 
-    # Add diagonal reference line
+   
     minv = float(min(y_true.min(), y_pred.min()))
     maxv = float(max(y_true.max(), y_pred.max()))
     plt.plot([minv, maxv], [minv, maxv])
@@ -298,9 +245,7 @@ def plot_actual_vs_pred(y_true: np.ndarray, y_pred: np.ndarray, out_path: Path, 
     plt.close()
 
 
-# -----------------------------
-# Main training flow
-# -----------------------------
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -321,7 +266,7 @@ def main() -> None:
             f"Example: data/raw/{args.file}"
         )
 
-    # Read Excel (needs openpyxl)
+  
     df = pd.read_excel(xlsx_path)
     print("RAW COLUMNS FROM EXCEL:", list(df.columns))
 
@@ -333,14 +278,14 @@ def main() -> None:
     df = add_time_features(df)
     df = basic_cleaning(df)
 
-    # ✅ NEW: Save climate baselines (region+month historical averages)
+  
     climate_baselines = build_climate_baselines(df)
     baseline_out = paths.models / "climate_baselines.json"
     with open(baseline_out, "w", encoding="utf-8") as f:
         json.dump(climate_baselines, f, indent=2)
-    print("✅ Saved climate baselines:", baseline_out)
+    print(" Saved climate baselines:", baseline_out)
 
-    # Time split
+   
     train_df, val_df, test_df = time_split(df)
 
     X_train, y_train, cat_idx = build_features_targets(train_df)
@@ -369,7 +314,7 @@ def main() -> None:
         use_best_model=True,
     )
 
-    # Evaluate
+   
     pred_val = model.predict(X_val)
     pred_test = model.predict(X_test)
 
@@ -386,19 +331,19 @@ def main() -> None:
         "best_iteration": int(getattr(model, "best_iteration_", model.tree_count_)),
     }
 
-    # Save model bundle
+   
     model_out = paths.models / "veg_price_model.joblib"
     joblib.dump(
         {"model": model, "cat_feature_indices": cat_idx, "feature_columns": list(X_train.columns)},
         model_out,
     )
 
-    # Save metrics
+   
     metrics_out = paths.reports / "metrics.json"
     with open(metrics_out, "w", encoding="utf-8") as f:
         json.dump(metrics, f, indent=2)
 
-    # Plot
+    
     plot_path = paths.figures / "actual_vs_pred_test.png"
     plot_actual_vs_pred(y_test.values, pred_test, plot_path, title="Actual vs Predicted (Test Set)")
 

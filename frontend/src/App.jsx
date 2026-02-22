@@ -1,4 +1,4 @@
-// frontend/src/App.jsx
+
 import { useMemo, useState } from "react";
 import axios from "axios";
 import {
@@ -11,7 +11,7 @@ import {
   CartesianGrid,
 } from "recharts";
 
-const API_BASE = "http://127.0.0.1:8000"; // FastAPI
+const API_BASE = "http://127.0.0.1:8000"; 
 
 function toIntSafe(v, fallback = 0) {
   const n = Number.parseInt(String(v), 10);
@@ -30,7 +30,7 @@ function computeQuarter(month) {
 }
 
 function computeWeekOfYear(dateStr) {
-  // ISO-ish week calc (good enough for UI). Backend also derives week if you use date.
+
   const d = new Date(dateStr);
   if (Number.isNaN(d.getTime())) return 1;
 
@@ -47,17 +47,15 @@ function cx(...classes) {
 }
 
 export default function App() {
-  // ✅ Simple/Advanced toggle:
-  // simple => user enters region, vegetable, date (API auto-fills climate baselines)
-  // advanced => user can optionally override climate fields
-  const [mode, setMode] = useState("simple"); // "simple" | "advanced"
+  
+  const [mode, setMode] = useState("simple"); 
 
   const [form, setForm] = useState({
     region: "Colombo",
     vegetable_commodity: "Carrot",
     date: "2026-12-30",
 
-    // advanced inputs (optional)
+   
     temperature_c: "",
     rainfall_mm: "",
     humidity_pct: "",
@@ -73,17 +71,13 @@ export default function App() {
     return { year, month, weekofyear, quarter };
   }, [form.date]);
 
-  // ✅ Payload rules:
-  // Always send region, commodity, date.
-  // Only send climate values in Advanced mode (and only if user typed them).
+
   const payload = useMemo(() => {
     const base = {
       region: String(form.region).trim(),
       vegetable_commodity: String(form.vegetable_commodity).trim(),
       date: form.date,
-      // (Optional) If your API still accepts month/year, it can ignore these when date exists.
-      // Keeping them doesn't hurt, but simplest is just date.
-      // month: derived.month, weekofyear: derived.weekofyear, quarter: derived.quarter, year: derived.year,
+
     };
 
     if (mode === "advanced") {
@@ -92,7 +86,7 @@ export default function App() {
       const h = toFloatOrNull(form.humidity_pct);
       const c = toFloatOrNull(form.crop_yield_impact_score);
 
-      // Only include if not null, so backend can baseline-fill missing ones
+
       if (t !== null) base.temperature_c = t;
       if (r !== null) base.rainfall_mm = r;
       if (h !== null) base.humidity_pct = h;
@@ -107,7 +101,6 @@ export default function App() {
   const [explainData, setExplainData] = useState([]);
   const [error, setError] = useState("");
 
-  // ✅ new: show if baseline was used and show final features returned by API
   const [usedBaseline, setUsedBaseline] = useState(false);
   const [finalFeatures, setFinalFeatures] = useState(null);
 
@@ -180,7 +173,7 @@ export default function App() {
             <div className="flex items-center justify-between gap-4 mb-4">
               <h2 className="text-lg font-medium">Inputs</h2>
 
-              {/* ✅ Toggle */}
+              {/* Toggle */}
               <div className="flex items-center gap-2">
                 <span className={cx("text-xs", mode === "simple" ? "text-slate-100" : "text-slate-400")}>
                   Simple
@@ -244,7 +237,7 @@ export default function App() {
 
               <div className="hidden md:block" />
 
-              {/* ✅ Advanced fields */}
+              {/* Advanced fields */}
               {mode === "advanced" && (
                 <>
                   <Field label="Temperature (°C) — optional override">
@@ -322,7 +315,7 @@ export default function App() {
               </button>
             </div>
 
-            {/* ✅ Show what is being sent */}
+         
             <div className="mt-5 rounded-2xl bg-slate-950 border border-slate-800 p-4">
               <div className="text-xs text-slate-400 mb-2">Request payload (what frontend sends)</div>
               <pre className="text-xs text-slate-200 overflow-auto">
@@ -341,7 +334,7 @@ export default function App() {
                 {predicted === null ? "—" : `${predicted} LKR/kg`}
               </div>
 
-              {/* ✅ Auto-fill message */}
+              {/* Auto-fill message */}
               {predicted !== null && (
                 <div className="mt-3">
                   {usedBaseline ? (
@@ -363,7 +356,7 @@ export default function App() {
               </div>
             </div>
 
-            {/* ✅ Show final features used by the model */}
+            {/* Show final features used by the model */}
             <div className="mt-5 rounded-2xl bg-slate-950 border border-slate-800 p-4">
               <div className="text-sm font-medium mb-2">Final features used for prediction</div>
               {!finalFeatures ? (
