@@ -1,65 +1,39 @@
-# ==============================
-# Python
-# ==============================
 __pycache__/
 *.py[cod]
 *$py.class
-
-# Virtual Environment
 .venv/
 venv/
 env/
-
-# Distribution / packaging
 build/
 dist/
 *.egg-info/
-
-# Jupyter Notebook checkpoints
 .ipynb_checkpoints/
 
-# ==============================
-# ML Artifacts
-# ==============================
 models/
 data/processed/
 reports/figures/
 
-# Saved model files
+
 *.pkl
 *.joblib
 *.model
 
-# ==============================
-# FastAPI / Server
-# ==============================
 .env
 .env.*
 *.log
 
-# ==============================
-# VS Code
-# ==============================
 .vscode/
 .history/
 
-# ==============================
-# React (when you create frontend)
-# ==============================
 frontend/node_modules/
 frontend/dist/
 frontend/build/
 
-# ==============================
-# OS Files
-# ==============================
 .DS_Store
 Thumbs.db
 desktop.ini
 
-# ==============================
-# Temporary files
-# ==============================
+
 *.tmp
 *.bak
 *.swp
